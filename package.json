@@ -6,7 +6,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {  
-    "cnabRows": "./cnabRows.js"  
+    "cnab-rows": "./cnabRows.js"  
   },  
   "dependencies": {
     "chalk": "^4.1.0",
