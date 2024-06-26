@@ -1,3 +1,4 @@
+#! /usr/bin/env node
 'use strict';
 import path from 'path'
 import { readFile, writeFile } from 'fs/promises'
