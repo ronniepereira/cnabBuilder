@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import { log } from 'console';
 import { CNAB_FILENAME_DEFAULT, HEADER_ROWS_DEFAULT, N_A, SEGMENT_POSITION, TAIL_ROWS_DEFAULT } from './utils/constants.js'
 import { checkCompanyInRow, extractCompanyDetails } from './utils/functions.js'
-import { messageCompanyLog, messageLog } from './utils/logger.js';
+import { messageLog } from './utils/logger.js';
 import { optionsYargs } from './utils/options.js';
 
 
@@ -39,35 +39,22 @@ async function main() {
           const companyExistsInRow = checkCompanyInRow(row, empresa)
           if (!companyExistsInRow) continue
 
-          const companyDetails = extractCompanyDetails(row, empresa)
-          log(messageCompanyLog(
-            currLine,
-            empresa,
-            companyDetails.name,
-            companyDetails.address,
-            companyDetails.segment
-          ))
+          const companyDetails = extractCompanyDetails(row, currLine)
+          log(messageLog(row, segmentUpper, from, to, companyDetails))
+          
           if (!!exportToJson) exportResults.push({ line: currLine, ...companyDetails })
           if (!wholeFile) break
         } else if (segmentUpper && row[SEGMENT_POSITION] === segmentUpper) {
-          log(messageLog(row, segmentUpper, from, to))
-          if(segmentUpper !== 'Q') return
-
-          const companyDetails = extractCompanyDetails(row)
-          log(messageCompanyLog(
-            companyDetails.rowIndex,
-            N_A,
-            companyDetails.name,
-            companyDetails.address,
-            companyDetails.segment
-          ))
-          if (!!exportToJson) exportResults.push({ line: currLine, ...companyDetails })
+          const companyDetails = segmentUpper === 'Q' ? extractCompanyDetails(row, currLine) : null          
+          log(messageLog(row, segmentUpper, from, to, companyDetails))
+          
+          if (!!exportToJson && segmentUpper === 'Q') exportResults.push(companyDetails)
           if (!wholeFile) break
         }
       }
     })
     .catch(error => {
-      console.log("[READ-FILE] Error on process file", error)
+      log("[READ-FILE] Error on process file", error)
     })
   console.timeEnd('leitura Async')
 
@@ -79,10 +66,9 @@ async function main() {
 
     await writeFile(exportToJson, fileBody, 'utf-8')
       .catch(error => {
-        console.log("[WRITE-FILE] Error on write output file", error)
+        log("[WRITE-FILE] Error on write output file", error)
       })
   }
-
 }
 
 await main()

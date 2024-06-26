@@ -10,5 +10,7 @@ export const optionsYargs = yargs(process.argv.slice(2))
   .option("c", { alias: "empresa", describe: "nome da empresa", type: "string"})
   .option("e", { alias: "exportToJson", describe: "caminho do arquivo json para exportar", type: "string"})
   .option("w", { alias: "wholeFile", describe: "analisa todas linhas do arquivo", type: "boolean", default: false})
-  .example('$0 -f 21 -t 34 -s p', 'lista a linha e campo que from e to do cnab')
+  .example('$0 -f 21 -t 34 -s p', 'lista a linha e campo entre from e to do cnab dado um segmento (-s)')
+  .example('$0 -f 21 -t 34 -p example2.rem --empresa=rede', 'busca por empresa e lista informações da empresa e campo entre from e to do CNAB')
+  .example('$0 -f 21 -t 34 -p example2.rem --empresa=rede -e results.json -w', 'busca por empresa em todo arquivo CNAB e salva informações em um arquivo output')
   .argv;
