@@ -1,73 +1,88 @@
 'use strict';
 import path from 'path'
-import { readFile } from 'fs/promises'
-import { fileURLToPath } from 'url';
+import { readFile, writeFile } from 'fs/promises'
+import { fileURLToPath } from 'url'
+import { log } from 'console';
+import { CNAB_FILENAME_DEFAULT, HEADER_ROWS_DEFAULT, N_A, SEGMENT_POSITION, TAIL_ROWS_DEFAULT } from './utils/constants.js'
+import { checkCompanyInRow, extractCompanyDetails } from './utils/functions.js'
+import { messageCompanyLog, messageLog } from './utils/logger.js';
+import { optionsYargs } from './utils/options.js';
 
-import yargs from 'yargs'
+
 import chalk from 'chalk'
-
-const optionsYargs = yargs(process.argv.slice(2))
-  .usage('Uso: $0 [options]')
-  .option("f", { alias: "from", describe: "posição inicial de pesquisa da linha do Cnab", type: "number", demandOption: true })
-  .option("t", { alias: "to", describe: "posição final de pesquisa da linha do Cnab", type: "number", demandOption: true })
-  .option("s", { alias: "segmento", describe: "tipo de segmento", type: "string", demandOption: true })
-  .example('$0 -f 21 -t 34 -s p', 'lista a linha e campo que from e to do cnab')
-  .argv;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const file = path.resolve(`${__dirname}/cnabExample.rem`)
+async function main() {
+  const { filename, from, to, segmento, empresa, exportToJson, wholeFile } = optionsYargs
+  const exportResults = []
 
-const { from, to, segmento } = optionsYargs
+  const filenameIsDefault = filename === CNAB_FILENAME_DEFAULT
+  if (filenameIsDefault) {
+    log(chalk.yellow(`Utilizando arquivo CNAB padrão 'cnabExample.rem', execute 'node cnabRows.js --help' para mais informações`));
+  }
 
-const sliceArrayPosition = (arr, ...positions) => [...arr].slice(...positions)
+  const cnabFile = path.join(__dirname, filename)
+  console.time('leitura Async')
+  await readFile(cnabFile, 'utf8')
+    .then(file => {
+      const cnabArray = file.split('\n')
+      if (!empresa && !segmento) {
+        chalk.red(`Seguintes parametros não encontrados: --empresa   --segmento`)
+        return
+      }
+      const segmentUpper = segmento ? segmento.toUpperCase() : null
+      for (let index = HEADER_ROWS_DEFAULT; index < cnabArray.length - TAIL_ROWS_DEFAULT; index++) {
+        const row = cnabArray[index]
+        const currLine = index + 1
+        if (!!empresa && row[SEGMENT_POSITION] === 'Q') {
+          const companyExistsInRow = checkCompanyInRow(row, empresa)
+          if (!companyExistsInRow) continue
 
-const messageLog = (segmento, segmentoType, from, to) => `
------ Cnab linha ${segmentoType} -----
+          const companyDetails = extractCompanyDetails(row, empresa)
+          log(messageCompanyLog(
+            currLine,
+            empresa,
+            companyDetails.name,
+            companyDetails.address,
+            companyDetails.segment
+          ))
+          if (!!exportToJson) exportResults.push({ line: currLine, ...companyDetails })
+          if (!wholeFile) break
+        } else if (segmentUpper && row[SEGMENT_POSITION] === segmentUpper) {
+          log(messageLog(row, segmentUpper, from, to))
+          if(segmentUpper !== 'Q') return
 
-posição from: ${chalk.inverse.bgBlack(from)}
+          const companyDetails = extractCompanyDetails(row)
+          log(messageCompanyLog(
+            companyDetails.rowIndex,
+            N_A,
+            companyDetails.name,
+            companyDetails.address,
+            companyDetails.segment
+          ))
+          if (!!exportToJson) exportResults.push({ line: currLine, ...companyDetails })
+          if (!wholeFile) break
+        }
+      }
+    })
+    .catch(error => {
+      console.log("[READ-FILE] Error on process file", error)
+    })
+  console.timeEnd('leitura Async')
 
-posição to: ${chalk.inverse.bgBlack(to)}
+  if (!!exportToJson) {
+    const fileBody = JSON.stringify({
+      createdAt: new Date().toISOString(),
+      result: exportResults
+    })
 
-item isolado: ${chalk.inverse.bgBlack(segmento.substring(from - 1, to))}
+    await writeFile(exportToJson, fileBody, 'utf-8')
+      .catch(error => {
+        console.log("[WRITE-FILE] Error on write output file", error)
+      })
+  }
 
-item dentro da linha P: 
-  ${segmento.substring(0, from)}${chalk.inverse.bgBlack(segmento.substring(from - 1, to))}${segmento.substring(to)}
+}
 
------ FIM ------
-`
-
-const log = console.log
-
-console.time('leitura Async')
-
-readFile(file, 'utf8')
-  .then(file => {
-    const cnabArray = file.split('\n')
-
-    const cnabHeader = sliceArrayPosition(cnabArray, 0, 2)
-
-    const [cnabBodySegmentoP, cnabBodySegmentoQ, cnabBodySegmentoR] = sliceArrayPosition(cnabArray, 2, -2)
-
-    const cnabTail = sliceArrayPosition(cnabArray, -2)
-
-    if (segmento === 'p') {
-      log(messageLog(cnabBodySegmentoP, 'P', from, to))
-      return
-    }
-
-    if (segmento === 'q') {
-      log(messageLog(cnabBodySegmentoQ, 'Q', from, to))
-      return
-    }
-
-    if (segmento === 'r') {
-      log(messageLog(cnabBodySegmentoR, 'R', from, to))
-      return
-    }
-
-  })
-  .catch(error => {
-    console.log("🚀 ~ file: cnabRows.js ~ line 76 ~ error", error)
-  })
-console.timeEnd('leitura Async')
+await main()
